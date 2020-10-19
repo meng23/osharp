@@ -16,8 +16,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 
 using OSharp.AspNetCore.Mvc.Filters;
-using OSharp.Core;
-using OSharp.Core.Functions;
+using OSharp.Authorization;
+using OSharp.Authorization.Functions;
 using OSharp.Exceptions;
 using OSharp.Reflection;
 
@@ -60,7 +60,7 @@ namespace OSharp.AspNetCore.Mvc
             {
                 throw new OsharpException($"类型“{controllerType.FullName}”不是MVC控制器类型");
             }
-            FunctionAccessType accessType = controllerType.HasAttribute<LoggedInAttribute>() || controllerType.HasAttribute<AuthorizeAttribute>()
+            FunctionAccessType accessType = controllerType.HasAttribute<LoggedInAttribute>()
                 ? FunctionAccessType.LoggedIn
                 : controllerType.HasAttribute<RoleLimitAttribute>()
                     ? FunctionAccessType.RoleLimit
@@ -84,7 +84,7 @@ namespace OSharp.AspNetCore.Mvc
         /// <returns></returns>
         protected override Function GetFunction(Function typeFunction, MethodInfo method)
         {
-            FunctionAccessType accessType = method.HasAttribute<LoggedInAttribute>() || method.HasAttribute<AuthorizeAttribute>()
+            FunctionAccessType accessType = method.HasAttribute<LoggedInAttribute>()
                 ? FunctionAccessType.LoggedIn
                 : method.HasAttribute<AllowAnonymousAttribute>()
                     ? FunctionAccessType.Anonymous
@@ -113,14 +113,19 @@ namespace OSharp.AspNetCore.Mvc
         /// <returns></returns>
         protected override bool IsIgnoreMethod(Function action, MethodInfo method, IEnumerable<Function> functions)
         {
-            bool flag = base.IsIgnoreMethod(action, method, functions);
-            return flag && method.HasAttribute<HttpPostAttribute>() || method.HasAttribute<NonActionAttribute>();
+            if (method.HasAttribute<NonActionAttribute>() || method.HasAttribute<NonFunctionAttribute>())
+            {
+                return true;
+            }
+
+            Function existing = GetFunction(functions, action.Area, action.Controller, action.Action, action.Name);
+            return existing != null && method.HasAttribute<HttpPostAttribute>();
         }
 
         /// <summary>
         /// 从类型中获取功能的区域信息
         /// </summary>
-        private static string GetArea(Type type)
+        private static string GetArea(MemberInfo type)
         {
             AreaAttribute attribute = type.GetAttribute<AreaAttribute>();
             return attribute?.RouteValue;

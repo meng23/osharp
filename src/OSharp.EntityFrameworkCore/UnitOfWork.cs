@@ -16,9 +16,9 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using OSharp.Core.Options;
 using OSharp.Dependency;
@@ -30,21 +30,21 @@ namespace OSharp.Entity
     /// <summary>
     /// 业务单元操作
     /// </summary>
-    public class UnitOfWork : IUnitOfWork
+    public class UnitOfWork : Disposable, IUnitOfWork
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceProvider _provider;
+        private readonly ILogger _logger;
         private readonly List<DbContextBase> _dbContexts = new List<DbContextBase>();
         private DbTransaction _transaction;
         private DbConnection _connection;
-        private OsharpDbContextOptions _dbContextOptions;
-        private bool _disposed;
 
         /// <summary>
         /// 初始化一个<see cref="UnitOfWork"/>类型的新实例
         /// </summary>
-        public UnitOfWork(IServiceProvider serviceProvider)
+        public UnitOfWork(IServiceProvider provider)
         {
-            _serviceProvider = serviceProvider;
+            _provider = provider;
+            _logger = provider.GetLogger(this);
         }
 
         /// <summary>
@@ -58,10 +58,10 @@ namespace OSharp.Entity
         /// <typeparam name="TEntity">实体类型</typeparam>
         /// <typeparam name="TKey">实体主键类型</typeparam>
         /// <returns><typeparamref name="TEntity"/>所属上下文类的实例</returns>
-        public virtual IDbContext GetDbContext<TEntity, TKey>() where TEntity : IEntity<TKey>
+        public virtual IDbContext GetEntityDbContext<TEntity, TKey>() where TEntity : IEntity<TKey>
         {
             Type entityType = typeof(TEntity);
-            return GetDbContext(entityType);
+            return GetEntityDbContext(entityType);
         }
 
         /// <summary>
@@ -69,33 +69,47 @@ namespace OSharp.Entity
         /// </summary>
         /// <param name="entityType">实体类型</param>
         /// <returns>实体所属上下文实例</returns>
-        public IDbContext GetDbContext(Type entityType)
+        public IDbContext GetEntityDbContext(Type entityType)
         {
             if (!entityType.IsEntityType())
             {
-                throw new OsharpException($"类型“{entityType}”不是实体类型");
+                throw new OsharpException($"类型 {entityType} 不是实体类型");
             }
 
-            IEntityManager manager = _serviceProvider.GetService<IEntityManager>();
+            IEntityManager manager = _provider.GetService<IEntityManager>();
             Type dbContextType = manager.GetDbContextTypeForEntity(entityType);
 
             //已存在上下文对象，直接返回
             DbContextBase dbContext = _dbContexts.FirstOrDefault(m => m.GetType() == dbContextType);
             if (dbContext != null)
             {
+                _logger.LogDebug($"由实体类 {entityType} 获取到已存在的上下文 {dbContext.GetType()} 实例，上下文标识：{dbContext.GetHashCode()}");
                 return dbContext;
             }
 
-            dbContext = (DbContextBase)_serviceProvider.GetService(dbContextType);
+            dbContext = (DbContextBase)GetDbContext(dbContextType);
+            _logger.LogDebug($"由实体类 {entityType} 创建新的上下文 {dbContext.GetType()} 实例，上下文标识：{dbContext.GetHashCode()}");
+
+            return dbContext;
+        }
+
+        /// <summary>
+        /// 获取指定类型的上下文实例
+        /// </summary>
+        /// <param name="dbContextType">上下文类型</param>
+        /// <returns></returns>
+        public IDbContext GetDbContext(Type dbContextType)
+        {
+            DbContextBase dbContext = (DbContextBase)_provider.GetService(dbContextType);
             if (!dbContext.ExistsRelationalDatabase())
             {
-                throw new OsharpException($"数据上下文“{dbContext.GetType().FullName}”的数据库不存在，请通过 Migration 功能进行数据迁移创建数据库。");
+                throw new OsharpException($"数据上下文 {dbContext.GetType().FullName} 的数据库不存在，请通过 Migration 功能进行数据迁移创建数据库。");
             }
 
-            _dbContextOptions = _serviceProvider.GetOSharpOptions().GetDbContextOptions(dbContextType);
-            ScopedDictionary scopedDictionary = _serviceProvider.GetService<ScopedDictionary>();
+            OsharpDbContextOptions dbContextOptions = _provider.GetOSharpOptions().GetDbContextOptions(dbContextType);
+            ScopedDictionary scopedDictionary = _provider.GetService<ScopedDictionary>();
             _connection = dbContext.Database.GetDbConnection();
-            scopedDictionary.TryAdd($"DnConnection_{_dbContextOptions.ConnectionString}", _connection);
+            scopedDictionary.TryAdd($"DbConnection_{dbContextOptions.ConnectionString}", _connection);
 
             dbContext.UnitOfWork = this;
             _dbContexts.Add(dbContext);
@@ -120,6 +134,7 @@ namespace OSharp.Entity
                 }
 
                 _transaction = _connection.BeginTransaction();
+                _logger.LogDebug($"在连接 {_connection.ConnectionString} 上开启新事务，事务标识：{_transaction.GetHashCode()}");
             }
 
             foreach (DbContextBase context in _dbContexts)
@@ -131,6 +146,7 @@ namespace OSharp.Entity
                 if (context.IsRelationalTransaction())
                 {
                     context.Database.UseTransaction(_transaction);
+                    _logger.LogDebug($"在上下文 {context.GetType()} 上应用现有事务，事务标识：{_transaction.GetHashCode()}");
                 }
                 else
                 {
@@ -159,7 +175,8 @@ namespace OSharp.Entity
                     await _connection.OpenAsync(cancellationToken);
                 }
 
-                _transaction = _connection.BeginTransaction();
+                _transaction = await _connection.BeginTransactionAsync(cancellationToken);
+                _logger.LogDebug($"在连接 {_connection.ConnectionString} 上开启新事务，事务标识：{_transaction.GetHashCode()}");
             }
 
             foreach (DbContextBase context in _dbContexts)
@@ -170,7 +187,8 @@ namespace OSharp.Entity
                 }
                 if (context.IsRelationalTransaction())
                 {
-                    context.Database.UseTransaction(_transaction);
+                    await context.Database.UseTransactionAsync(_transaction, cancellationToken);
+                    _logger.LogDebug($"在上下文 {context.GetType()} 上应用现有事务");
                 }
                 else
                 {
@@ -192,6 +210,7 @@ namespace OSharp.Entity
             }
 
             _transaction.Commit();
+            _logger.LogDebug($"提交事务，事务标识：{_transaction.GetHashCode()}");
             foreach (DbContextBase context in _dbContexts)
             {
                 if (context.IsRelationalTransaction())
@@ -215,6 +234,7 @@ namespace OSharp.Entity
             if (_transaction?.Connection != null)
             {
                 _transaction.Rollback();
+                _logger.LogDebug($"回滚事务，事务标识：{_transaction.GetHashCode()}");
             }
             foreach (var context in _dbContexts)
             {
@@ -223,7 +243,6 @@ namespace OSharp.Entity
                     CleanChanges(context);
                     if (context.Database.CurrentTransaction != null)
                     {
-                        //context.Database.CurrentTransaction.Rollback();
                         context.Database.CurrentTransaction.Dispose();
                     }
                     continue;
@@ -233,29 +252,28 @@ namespace OSharp.Entity
             HasCommitted = true;
         }
 
-        private static void CleanChanges(DbContext context)
+        private void CleanChanges(DbContext context)
         {
             var entries = context.ChangeTracker.Entries().ToArray();
             foreach (var entry in entries)
             {
                 entry.State = EntityState.Detached;
             }
+            _logger.LogDebug($"回滚事务，清理上下文 {context.GetType()} 的变更");
         }
 
-        /// <summary>释放对象.</summary>
-        public void Dispose()
+        protected override void Dispose(bool disposing)
         {
-            if (_disposed)
+            if (!Disposed)
             {
-                return;
-            }
-            _transaction?.Dispose();
-            foreach (DbContextBase context in _dbContexts)
-            {
-                context.Dispose();
+                _transaction?.Dispose();
+                foreach (DbContextBase context in _dbContexts)
+                {
+                    context.Dispose();
+                }
             }
 
-            _disposed = true;
+            base.Dispose(disposing);
         }
     }
 }

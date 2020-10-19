@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------
 //  <copyright file="DbContextBase.cs" company="OSharp开源团队">
 //      Copyright (c) 2014-2019 OSharp. All rights reserved.
 //  </copyright>
@@ -14,12 +14,16 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using OSharp.Audits;
 using OSharp.Core.Options;
 using OSharp.EventBuses;
+using OSharp.Extensions;
+using OSharp.Reflection;
+
 
 namespace OSharp.Entity
 {
@@ -29,21 +33,25 @@ namespace OSharp.Entity
     public abstract class DbContextBase : DbContext, IDbContext
     {
         private readonly IEntityManager _entityManager;
-        private readonly ILogger _logger;
         private readonly OsharpDbContextOptions _osharpDbOptions;
         private readonly IServiceProvider _serviceProvider;
 
         /// <summary>
         /// 初始化一个<see cref="DbContextBase"/>类型的新实例
         /// </summary>
-        protected DbContextBase(DbContextOptions options, IEntityManager entityManager, IServiceProvider serviceProvider)
+        protected DbContextBase(DbContextOptions options, IServiceProvider serviceProvider)
             : base(options)
         {
-            _entityManager = entityManager;
             _serviceProvider = serviceProvider;
+            _entityManager = serviceProvider.GetService<IEntityManager>();
             _osharpDbOptions = serviceProvider?.GetOSharpOptions()?.DbContexts?.Values.FirstOrDefault(m => m.DbContextType == GetType());
-            _logger = serviceProvider?.GetLogger(GetType());
+            Logger = serviceProvider.GetLogger(this);
         }
+
+        /// <summary>
+        /// 获取 日志对象
+        /// </summary>
+        protected ILogger Logger { get; }
 
         /// <summary>
         /// 获取或设置 当前上下文所在工作单元，为null将使用EF自动事务而不启用手动事务
@@ -72,10 +80,10 @@ namespace OSharp.Entity
         public override int SaveChanges()
         {
             IList<AuditEntityEntry> auditEntities = new List<AuditEntityEntry>();
-            if (_osharpDbOptions?.AuditEntityEnabled == true)
+            if (_osharpDbOptions.AuditEntityEnabled == true)
             {
                 IAuditEntityProvider auditEntityProvider = _serviceProvider.GetService<IAuditEntityProvider>();
-                auditEntities = auditEntityProvider?.GetAuditEntities(this)?.ToList();
+                auditEntities = auditEntityProvider?.GetAuditEntities(this).ToList();
             }
 
             //开启或使用现有事务
@@ -86,7 +94,7 @@ namespace OSharp.Entity
             {
                 AuditEntityEventData eventData = new AuditEntityEventData(auditEntities);
                 IEventBus eventBus = _serviceProvider.GetService<IEventBus>();
-                eventBus?.Publish(this, eventData);
+                eventBus.Publish(this, eventData);
             }
 
             return count;
@@ -120,10 +128,10 @@ namespace OSharp.Entity
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = new CancellationToken())
         {
             IList<AuditEntityEntry> auditEntities = new List<AuditEntityEntry>();
-            if (_osharpDbOptions?.AuditEntityEnabled == true)
+            if (_osharpDbOptions.AuditEntityEnabled == true)
             {
                 IAuditEntityProvider auditEntityProvider = _serviceProvider.GetService<IAuditEntityProvider>();
-                auditEntities = auditEntityProvider?.GetAuditEntities(this)?.ToList();
+                auditEntities = auditEntityProvider?.GetAuditEntities(this).ToList();
             }
 
             //开启或使用现有事务
@@ -181,10 +189,39 @@ namespace OSharp.Entity
             foreach (IEntityRegister register in registers)
             {
                 register.RegisterTo(modelBuilder);
-                _logger?.LogDebug($"将实体类“{register.EntityType}”注册到上下文“{contextType}”中");
+                Logger.LogDebug($"将实体类 {register.EntityType} 注册到上下文 {contextType} 中");
             }
+            Logger.LogInformation($"上下文 {contextType} 注册了{registers.Length}个实体类");
 
-            _logger?.LogInformation($"上下文“{contextType}”注册了{registers.Length}个实体类");
+            List<IMutableEntityType> entityTypes = modelBuilder.Model.GetEntityTypes().ToList();
+            foreach (IMutableEntityType entityType in entityTypes)
+            {
+                //启用时间属性UTC格式
+                if (_osharpDbOptions.DateTimeUtcFormatEnabled)
+                {
+                    IEntityDateTimeUtcConversion utcConversion = _serviceProvider.GetService<IEntityDateTimeUtcConversion>();
+                    utcConversion.Convert(entityType);
+                }
+
+                //按预定前缀更改表名
+                string prefix = GetTableNamePrefix(entityType.ClrType);
+                if (prefix.IsNullOrEmpty())
+                {
+                    continue;
+                }
+                modelBuilder.Entity(entityType.ClrType).ToTable($"{prefix}_{entityType.GetTableName()}");
+            }
+        }
+
+        /// <summary>
+        /// 从实体类型获取表名前缀
+        /// </summary>
+        /// <param name="entityType">实体类型</param>
+        /// <returns></returns>
+        protected virtual string GetTableNamePrefix(Type entityType)
+        {
+            TableNamePrefixAttribute attribute = entityType.GetAttribute<TableNamePrefixAttribute>();
+            return attribute?.Prefix;
         }
 
         ///// <summary>
@@ -199,8 +236,6 @@ namespace OSharp.Entity
         //    }
         //}
 
-        #region Overrides of DbContext
-
         /// <summary>
         ///     Releases the allocated resources for this context.
         /// </summary>
@@ -209,7 +244,5 @@ namespace OSharp.Entity
             base.Dispose();
             UnitOfWork = null;
         }
-
-        #endregion
     }
 }

@@ -12,8 +12,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Reflection;
 
+using OSharp.Authorization.EntityInfos;
 using OSharp.Entity;
-using OSharp.Core.EntityInfos;
 
 using Xunit;
 
@@ -145,6 +145,18 @@ namespace OSharp.Reflection.Tests
             Assert.Equal("bool", typeof(Boolean).DisplayName());
             Assert.Equal("System.Collections.Generic.List<>", typeof(List<>).DisplayName());
             Assert.Equal("OSharp.Reflection.Tests.TypeExtensionsTests", typeof(TypeExtensionsTests).DisplayName());
+        }
+
+        [Fact()]
+        public void IsVirtualTest()
+        {
+            Type type = typeof(TestEntity);
+            PropertyInfo property = type.GetProperty("Id");
+            Assert.False(property.IsVirtual());
+            property = type.GetProperty("AddDate");
+            Assert.False(property.IsVirtual());
+            property = type.GetProperty("TestEntities");
+            Assert.True(property.IsVirtual());
         }
     }
 }

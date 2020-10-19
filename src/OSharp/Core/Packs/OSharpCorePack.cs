@@ -17,6 +17,10 @@ using OSharp.Caching;
 using OSharp.Core.Options;
 using OSharp.Entity;
 using OSharp.Filter;
+using OSharp.Http;
+using OSharp.Logging;
+using OSharp.Net;
+using OSharp.Threading;
 
 
 namespace OSharp.Core.Packs
@@ -43,9 +47,17 @@ namespace OSharp.Core.Packs
             services.TryAddSingleton<IEntityTypeFinder, EntityTypeFinder>();
             services.TryAddSingleton<IInputDtoTypeFinder, InputDtoTypeFinder>();
             services.TryAddSingleton<IOutputDtoTypeFinder, OutputDtoTypeFinder>();
-
+            services.TryAddSingleton<ICancellationTokenProvider, NoneCancellationTokenProvider>();
+            services.TryAddSingleton<IEmailSender, DefaultEmailSender>();
             services.TryAddSingleton<ICacheService, CacheService>();
+            services.TryAddSingleton<StartupLogger>();
+
             services.TryAddScoped<IFilterService, FilterService>();
+
+            services.TryAddTransient<IClientHttpCrypto, ClientHttpCrypto>();
+            services.AddTransient<ClientHttpCryptoHandler>();
+
+            services.AddDistributedMemoryCache();
 
             return services;
         }

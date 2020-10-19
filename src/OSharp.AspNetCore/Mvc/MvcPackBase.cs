@@ -8,15 +8,15 @@
 // -----------------------------------------------------------------------
 
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Internal;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Newtonsoft.Json.Serialization;
 
-using OSharp.AspNetCore.Mvc.Conventions;
 using OSharp.AspNetCore.Mvc.Filters;
 using OSharp.Core.Packs;
+using OSharp.Dependency;
+using OSharp.Threading;
 
 
 namespace OSharp.AspNetCore.Mvc
@@ -40,32 +40,22 @@ namespace OSharp.AspNetCore.Mvc
         public override IServiceCollection AddServices(IServiceCollection services)
         {
             services = AddCors(services);
+            services.AddControllersWithViews()
+                .AddNewtonsoftJson(options =>
+                {
+                    options.SerializerSettings.ContractResolver = new DefaultContractResolver();
+                });
 
-#if NETCOREAPP3_0
-            services.AddControllersWithViews(options =>
-            {
-                options.Conventions.Add(new DashedRoutingConvention());
-                options.Filters.Add(new OnlineUserAuthorizationFilter()); // 构建在线用户信息
-                options.Filters.Add(new FunctionAuthorizationFilter()); // 全局功能权限过滤器
-            }).AddNewtonsoftJson(options =>
-            {
-                options.SerializerSettings.ContractResolver = new DefaultContractResolver();
-            });
-#else
-            services.AddMvc(options =>
-            {
-                options.Conventions.Add(new DashedRoutingConvention());
-                options.Filters.Add(new OnlineUserAuthorizationFilter()); // 构建在线用户信息
-                options.Filters.Add(new FunctionAuthorizationFilter()); // 全局功能权限过滤器
-            }).AddJsonOptions(options =>
-            {
-                options.SerializerSettings.ContractResolver = new DefaultContractResolver();
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
-#endif
+            services.AddRouting(opts => opts.LowercaseUrls = true);
 
             services.AddScoped<UnitOfWorkFilterImpl>();
             services.AddHttpsRedirection(opts => opts.HttpsPort = 443);
-            services.AddDistributedMemoryCache();
+
+            services.AddScoped<UnitOfWorkAttribute>();
+            services.TryAddSingleton<IVerifyCodeService, VerifyCodeService>();
+            services.TryAddSingleton<IScopedServiceResolver, RequestScopedServiceResolver>();
+            services.Replace<ICancellationTokenProvider, HttpContextCancellationTokenProvider>(ServiceLifetime.Singleton);
+            services.Replace<IHybridServiceScopeFactory, HttpContextServiceScopeFactory>(ServiceLifetime.Singleton);
 
             return services;
         }
@@ -76,13 +66,8 @@ namespace OSharp.AspNetCore.Mvc
         /// <param name="app">应用程序构建器</param>
         public override void UsePack(IApplicationBuilder app)
         {
-#if NETCOREAPP3_0
             app.UseRouting();
             UseCors(app);
-#else   
-            UseCors(app);
-            app.UseMvcWithAreaRoute();
-#endif
 
             IsEnabled = true;
         }
