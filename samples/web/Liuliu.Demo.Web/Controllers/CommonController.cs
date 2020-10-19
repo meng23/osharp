@@ -8,6 +8,7 @@
 // -----------------------------------------------------------------------
 
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Dynamic;
@@ -15,7 +16,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using OSharp.AspNetCore;
 using OSharp.AspNetCore.UI;
+using OSharp.Authorization;
 using OSharp.Authorization.Modules;
 using OSharp.Data;
 using OSharp.Drawing;
@@ -49,6 +51,8 @@ namespace Liuliu.Demo.Web.Controllers
             _verifyCodeService = verifyCodeService;
             _environment = environment;
         }
+
+        #region 原始代码
 
         /// <summary>
         /// 获取验证码图片
@@ -140,5 +144,43 @@ namespace Liuliu.Demo.Web.Controllers
 
             return info;
         }
+
+        #endregion
+
+        [HttpGet]
+        /*
+         * 接口访问三种模式
+         * AllowAnonymous   白名单
+         * LoggedIn         登录访问
+         * RoleLimit        登录并属于该角色
+         */
+        //[AllowAnonymous]
+        //[LoggedIn]
+        //[RoleLimit]
+        public List<NodeOutputDto> GetStringTest()
+        {
+            var result = new List<NodeOutputDto>();
+            result.Add(new NodeOutputDto()
+            {
+                Id = 1,
+                Name = "test1",
+                CreateTime = DateTime.Now
+            });
+            result.Add(new NodeOutputDto()
+            {
+                Id = 2,
+                Name = "test2",
+                CreateTime = DateTime.Now
+            });
+            result.Add(new NodeOutputDto()
+            {
+                Id = 3,
+                Name = "test3",
+                CreateTime = DateTime.Now
+            });
+            return result;
+        }
+
+
     }
 }

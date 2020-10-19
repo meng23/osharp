@@ -103,13 +103,13 @@ namespace OSharp.AspNetCore.Mvc.Filters
                         type = AjaxResultType.UnAuth;
                         break;
                     case 403:
-                        type = AjaxResultType.UnAuth;
+                        type = AjaxResultType.Forbidden;
                         break;
                     case 404:
-                        type = AjaxResultType.UnAuth;
+                        type = AjaxResultType.NoFound;
                         break;
                     case 423:
-                        type = AjaxResultType.UnAuth;
+                        type = AjaxResultType.Locked;
                         break;
                     default:
                         type = AjaxResultType.Error;
