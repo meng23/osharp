@@ -51,7 +51,6 @@ namespace OSharp.Data
 
         #region 自定义Http返回代码
 
-        #endregion
         /// <summary>
         /// 主动抛出异常
         /// </summary>
@@ -104,6 +103,8 @@ namespace OSharp.Data
         /// 未知错误
         /// </summary>
         UnKnowErr = 4099
+
+        #endregion
 
     }
 }

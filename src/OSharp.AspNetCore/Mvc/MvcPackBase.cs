@@ -44,6 +44,8 @@ namespace OSharp.AspNetCore.Mvc
                 .AddNewtonsoftJson(options =>
                 {
                     options.SerializerSettings.ContractResolver = new DefaultContractResolver();
+                    //返回DateTime类型格式化
+                    options.SerializerSettings.DateFormatString = "yyyy-MM-dd HH:mm:ss";
                 });
 
             services.AddRouting(opts => opts.LowercaseUrls = true);
