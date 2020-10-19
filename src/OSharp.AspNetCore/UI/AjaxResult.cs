@@ -42,6 +42,16 @@ namespace OSharp.AspNetCore.UI
         }
 
         /// <summary>
+        /// 初始化一个<see cref="AjaxResult"/>类型的新实例
+        /// </summary>
+        public AjaxResult(object data)
+        {
+            Type = AjaxResultType.Success;
+            Content = "操作成功";
+            Data = data;
+        }
+
+        /// <summary>
         /// 获取或设置 Ajax操作结果类型
         /// </summary>
         public AjaxResultType Type { get; set; }
