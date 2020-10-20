@@ -64,7 +64,9 @@ namespace OSharp.Authentication
             services.AddScoped<OsharpCookieAuthenticationEvents>();
             AuthenticationBuilder builder = services.AddAuthentication(opts =>
             {
-                opts.DefaultScheme = IdentityConstants.ApplicationScheme;
+                //TODO:验证JWT验证启用
+                //opts.DefaultScheme = IdentityConstants.ApplicationScheme;       //cookies验证
+                opts.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;    //JWT验证Bearer
             });
             AddJwtBearer(services, builder);
             AddCookie(services, builder);

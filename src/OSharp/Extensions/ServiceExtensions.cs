@@ -205,8 +205,8 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         public static IServiceCollection LogDebug(this IServiceCollection services, string message, string logName)
         {
-            StartupLogger logger = services.GetOrAddSingletonInstance(() => new StartupLogger());
-            logger.LogDebug(message, logName);
+            //StartupLogger logger = services.GetOrAddSingletonInstance(() => new StartupLogger());
+            //logger.LogDebug(message, logName);
             return services;
         }
 

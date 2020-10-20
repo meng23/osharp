@@ -181,6 +181,19 @@ namespace Liuliu.Demo.Web.Controllers
             return result;
         }
 
+        [HttpGet]
+        [LoggedIn]
+        public string GetStringTest1()
+        {
+            return "111111";
+        }
+
+        [HttpGet]
+        [RoleLimit]
+        public string GetStringTest2()
+        {
+            return "111111";
+        }
 
     }
 }
