@@ -1,4 +1,4 @@
-﻿// -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 //  <copyright file="UserController.cs" company="OSharp开源团队">
 //      Copyright (c) 2014-2018 OSharp. All rights reserved.
 //  </copyright>
@@ -20,7 +20,7 @@ using Liuliu.Demo.Common.Dtos;
 using Liuliu.Demo.Identity;
 using Liuliu.Demo.Identity.Dtos;
 using Liuliu.Demo.Identity.Entities;
-
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -66,6 +66,26 @@ namespace Liuliu.Demo.Web.Areas.Admin.Controllers
             _filterService = filterService;
         }
 
+        [HttpGet]
+        [AllowAnonymous]
+        /// <summary>
+        /// 获取人员列表
+        /// </summary>
+        /// <returns></returns>
+        public List<UserOutputDto> GetUserList()
+        {
+            var page = _userManager.Users.Select(p => new UserOutputDto
+            {
+                Id = p.Id,
+                NickName = p.NickName,
+                UserName = p.UserName,
+                Email = p.Email
+            });
+
+            return page.ToList();
+        }
+
+
         /// <summary>
         /// 读取用户列表信息
         /// </summary>
@@ -99,7 +119,7 @@ namespace Liuliu.Demo.Web.Areas.Admin.Controllers
                 Updatable = updateFunc(m.D),
                 Deletable = deleteFunc(m.D)
             }).ToArray());
-            
+
             return page.ToPageData();
         }
 

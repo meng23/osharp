@@ -18,7 +18,7 @@ namespace Liuliu.Demo.Web.Areas.Admin.Controllers
 {
     [AreaInfo("Admin", Display = "管理")]
     [RoleLimit]
-    [Authorize(Policy = FunctionRequirement.OsharpPolicy, AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [Authorize(Policy = FunctionRequirement.OsharpPolicy, AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]    
     public abstract class AdminApiController : AreaApiControllerBase
     { }
 }

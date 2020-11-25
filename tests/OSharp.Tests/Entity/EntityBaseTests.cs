@@ -68,7 +68,7 @@ namespace OSharp.Entity.Tests
     public class ColumnEncryptAttribute : Attribute
     {
         public string Name { get; set; }
-        public ColumnEncryptAttribute(string value) { Name = value}
+        public ColumnEncryptAttribute(string value) { Name = value; }
     }
 
 
